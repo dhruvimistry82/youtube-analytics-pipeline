@@ -1,0 +1,11 @@
+warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/.gitignore b/.gitignore[m
+[1mindex faf57d4..6c28d54 100644[m
+[1m--- a/.gitignore[m
+[1m+++ b/.gitignore[m
+[36m@@ -3,3 +3,4 @@[m
+ .venv-1/[m
+ __pycache__/[m
+ *.pyc[m
+[32m+[m[32mlogs/[m
+\ No newline at end of file[m

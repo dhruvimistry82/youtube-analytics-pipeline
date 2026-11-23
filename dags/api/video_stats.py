@@ -1,18 +1,22 @@
 import requests
 import json
 from datetime import datetime,date
-import os
-from dotenv import load_dotenv
-load_dotenv(dotenv_path=r"D:\Downloads\python project\.env")
+#import os
+#from dotenv import load_dotenv
+#load_dotenv(dotenv_path=r"D:\Downloads\python project\.env")
+from airflow.decorators import task  # type: ignore[import-not-found]
+from airflow.models import Variable  # type: ignore[import-not-found]
 
 
-API_KEY = os.getenv("API_KEY")
-CHANNEL_HANDLE = "MrBeast"
+
+API_KEY = Variable.get("API_KEY")
+CHANNEL_HANDLE = Variable.get("CHANNEL_HANDLE")
 maxResults = 50
 #print("ENV file loaded:", os.path.exists("./.env"))
 #print("API key found:", bool(API_KEY))
 #print("API key length:", len(API_KEY) if API_KEY else 0)
 
+@task
 def get_playlist_id():
     try:
         url = f"https://youtube.googleapis.com/youtube/v3/channels?part=contentDetails&forHandle={CHANNEL_HANDLE}&key={API_KEY}" 
@@ -34,43 +38,50 @@ def get_playlist_id():
 
 
 
-def  get_video_ids(playlistId):
 
+@task
+def get_video_ids(playlistId):
     video_ids = []
+    page_token = None
 
-    PageToken = None
-    base_url = f"https://youtube.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults={maxResults}&playlistId={playlistId}&key={API_KEY}"
+    base_url = "https://youtube.googleapis.com/youtube/v3/playlistItems"
 
-    try:
+    while True:
+        params = {
+            "part": "contentDetails",
+            "maxResults": 50,
+            "playlistId": playlistId,
+            "key": API_KEY,
+        }
 
-        while True:
-            url = base_url
+        if page_token:
+            params["pageToken"] = page_token
 
-            if PageToken:
-                url += f"&pageToken={PageToken}"
+        response = requests.get(
+            base_url,
+            params=params,
+            timeout=30,
+        )
+        response.raise_for_status()
 
-            response = requests.get(url)
+        data = response.json()
 
-            response.raise_for_status()  # Raise an exception for HTTP errors
+        for item in data.get("items", []):
+            video_id = item["contentDetails"]["videoId"]
+            video_ids.append(video_id)
 
-            data = response.json()
-            #print(json.dumps(data, indent=4))
+        page_token = data.get("nextPageToken")
 
-            for item in data['items']:
-                video_id = item['contentDetails']['videoId']
-                video_ids.append(video_id)
+        print(f"Videos collected so far: {len(video_ids)}")
 
-            pageToken = data.get('nextPageToken')
-            if not pageToken:
-                break
+        if not page_token:
+            break
 
-        return video_ids
-            
-
-    except requests.exceptions.RequestException as e:
-        raise e
+    print(f"Total videos collected: {len(video_ids)}")
+    return video_ids
 
 
+@task
 def extract_video_data(video_ids):
     extracted_data = []
 
@@ -112,7 +123,7 @@ def extract_video_data(video_ids):
 
     except requests.exceptions.RequestException as e:
         raise e
-
+@task
 def save_data_to_json(extracted_data):
     file_path = f"./data/YT_data_{date.today()}.json"
 
